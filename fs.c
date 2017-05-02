@@ -52,14 +52,17 @@ void fs_debug()
 
 	disk_read(0,block.data);
 	printf("superblock:\n");
+
 	if(block.super.magic == FS_MAGIC){
 		printf("    magic number is valid\n");
 	} else{
 		printf("    magic number is not valid\n");
+		return;
 	}
+
 	printf("    %d blocks\n",block.super.nblocks);
-	printf("    %d inode blocks\n",block.super.ninodeblocks);
-	printf("    %d inodes\n",block.super.ninodes);
+	printf("    %d blocks for inodes\n",block.super.ninodeblocks);
+	printf("    %d inodes total\n",block.super.ninodes);
 
 	int i = 0;
 	int j = 0;
@@ -68,17 +71,17 @@ void fs_debug()
 	union fs_block tmp_block;
 
 	// INODE HANDLER //
-	for(i = 0; i<block.super.ninodeblocks; i++){ // Iterates through all inode blocks
+	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
 		for(j = 0; j<128; j++){ // scans 128 inodes per block
 			if(it_block.inode[j].isvalid ==1){
-				printf("inode %d:\n",j*i);
+				printf("inode %d:\n",j+((i-1)*128)); // check this
 				printf("    size: %d bytes\n",it_block.inode[j].size);
 				printf("    direct blocks:");
-				for(k=0; k<4; k++){ // direct blocks
-				//	if(it_block.inode[j].direct[k] > 0){
+				for(k=0; k<5; k++){ // direct blocks
+					if(it_block.inode[j].direct[k] > 0){
 						printf(" %d",it_block.inode[j].direct[k]);
-				//	}
+					}
 				}
 				printf("\n");
 				if(it_block.inode[j].indirect > 0){ // indirect block
@@ -86,7 +89,7 @@ void fs_debug()
 					disk_read(it_block.inode[j].indirect,tmp_block.data);
 					printf("    indirect data blocks:");
 					for(k=0; k<1024; k++){
-						if(tmp_block.pointers[k] > 0){
+						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
 							printf(" %d",tmp_block.pointers[k]);
 						}
 					}
