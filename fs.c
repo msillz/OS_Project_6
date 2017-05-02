@@ -219,9 +219,25 @@ int fs_create()
 
 int fs_delete( int inumber )
 {
-//	union fs_block block;
+	union fs_block block;
+	int numInBlock = inumber%128;
+	int numBlock = floor(inumber/128);
+	disk_read(1+numBlock,block.data);
+	if(block.inode[numInBlock].isvalid == 0)
+	{
+		return 0;
+	}
+	block.inode[numInBlock].isvalid = 0;
+	block.inode[numInBlock].size = 0;
+	int k;
+	for(k=0;k<5;k++){
+		block.inode[numInBlock].direct[k] = 0;
+	}
+	block.inode[numInBlock].indirect = 0;
+	disk_write(1+numBlock,block.data);
+	return 1;
 	// fix the bitmap???
-	return 0;
+
 }
 
 int fs_getsize( int inumber )
