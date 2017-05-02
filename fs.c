@@ -74,10 +74,17 @@ int fs_format()
 
 	disk_write(0,block.data);
 
-	int i,j; // sets all the inode valid bits to 0
+	int i,j,k; // sets all the inode valid bits to 0
 	for(i=1;i<=nodesToZero;i++){
 		for(j=0;j<128;j++){
-			block.inode[j].isvalid = 0;
+			if(i>1 || (j!=0 && i==1)){
+				block.inode[j].isvalid = 0;
+				block.inode[j].size = 0;
+				for(k=0;k<5;k++){
+					block.inode[j].direct[k] = 0;
+				}
+				block.inode[j].indirect = 0;
+			}
 		}
 		disk_write(i,block.data);
 	}
@@ -113,7 +120,7 @@ void fs_debug()
 	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
 		for(j = 0; j<128; j++){ // scans 128 inodes per block
-			if(it_block.inode[j].isvalid ==1){
+			if(it_block.inode[j].isvalid == 1){
 				printf("inode %d:\n",j+((i-1)*128)); // check this
 				printf("    size: %d bytes\n",it_block.inode[j].size);
 				printf("    direct blocks:");
@@ -196,10 +203,13 @@ int fs_create()
 	for(i=1; i<=ninodeblocks;i++){
 		disk_read(i,block.data);
 		for(j=0;j<INODES_PER_BLOCK;j++){
-			if(!block.inode[j].isvalid){
-				block.inode[j].isvalid = 1;
-				printf("inode %d created\n",((i-1)*128)+j);
-				return 1;
+			if ( (i > 1) || (i == 1 && j !=0) ) {
+				if(block.inode[j].isvalid == 0){
+					block.inode[j].isvalid = 1;
+					block.inode[j].size = 0;
+					disk_write(i,block.data);
+					return ((i-1)*128)+j;
+				}
 			}
 		}
 	}
@@ -209,12 +219,22 @@ int fs_create()
 
 int fs_delete( int inumber )
 {
+//	union fs_block block;
+	// fix the bitmap???
 	return 0;
 }
 
 int fs_getsize( int inumber )
 {
-	return -1;
+	union fs_block block;
+	int numInBlock = inumber%128;
+	int numBlock = floor(inumber/128);
+	disk_read(1+numBlock,block.data);
+	if(block.inode[numInBlock].size >= 0){
+		return block.inode[numInBlock].size;
+	} else{
+		return -1;
+	}
 }
 
 int fs_read( int inumber, char *data, int length, int offset )
