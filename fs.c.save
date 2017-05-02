@@ -47,7 +47,7 @@ union fs_block {
 
 int fs_format()
 {
-	if(ISMOUNT){
+	if(!ISMOUNT){
 		printf("Disk already mounted. Please de-mount before attempting to format.\n");
 		return 0;
 	}
@@ -88,7 +88,7 @@ int fs_format()
 void fs_debug()
 {
 	union fs_block block;
-	
+
 	disk_read(0,block.data);
 	printf("superblock:\n");
 
@@ -143,8 +143,6 @@ void fs_debug()
 int fs_mount()
 {
 	union fs_block block;
-	union fs_block it_block;
-	union fs_block tmp_block;
 
 	disk_read(0,block.data);
 	if(block.super.magic != FS_MAGIC){
@@ -154,56 +152,41 @@ int fs_mount()
 
 	bitmap = (int *) malloc(sizeof(int)*block.super.nblocks); // WHAT IF WE DEMOUNT? NEEDS TO BE 
 	//FREED
-	int i, j, k;
-	bitmap[0] = 1;
+
 	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
 		for(j = 0; j<128; j++){ // scans 128 inodes per block
 			if(it_block.inode[j].isvalid ==1){ // if there is a valid inode in a block
-				bitmap[i] = i;
+				bitmap[i] = 1;
+//				printf("    size: %d bytes\n",it_block.inode[j].size);
+//				printf("    direct blocks:");
+				// ceiling of (size / 4096) is the limit rather than 5, print all direct blocks
 				for(k=0; k<5; k++){ // direct blocks
 					if(it_block.inode[j].direct[k] > 0){ // CHANGE THIS
-						bitmap[it_block.inode[j].direct[k]] = it_block.inode[j].direct[k];
+						bitmap[it_block.inode[j].direct[k]] = 1
 					}
 				}
 
 				if(it_block.inode[j].indirect > 0){ // indirect block
-					bitmap[it_block.inode[j].indirect] = it_block.inode[j].indirect;
+					printf("    indirect block: %d\n",it_block.inode[j].indirect);
 					disk_read(it_block.inode[j].indirect,tmp_block.data);
-					for(k=0; k<1024; k++){
-						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
-							bitmap[tmp_block.pointers[k]] = tmp_block.pointers[k];
-						}
-					}
+					printf("    indirect data blocks:")
+//					for(k=0; k<1024; k++){
+//						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
+//							printf(" %d",tmp_block.pointers[k]);
+//						}
+//					}
+//					printf("\n");
 				}
 			}
 		}
 	}
-	for(i = 0; i<block.super.nblocks; i++){
-		printf(" %d ",bitmap[i]);
-	}
-	
-	ISMOUNT = true;
-	return 1;
+
+	return 0;
 }
 
 int fs_create()
 {
-	union fs_block block;
-	disk_read(0,block.data);
-	int ninodeblocks = block.super.ninodeblocks;
-	int i,j;
-	for(i=1; i<=ninodeblocks;i++){
-		disk_read(i,block.data);
-		for(j=0;j<INODES_PER_BLOCK;j++){
-			if(!block.inode[j].isvalid){
-				block.inode[j].isvalid = 1;
-				printf("inode %d created\n",((i-1)*128)+j);
-				return 1;
-			}
-		}
-	}
-	printf("error: no space in inode blocks\n");
 	return 0;
 }
 
