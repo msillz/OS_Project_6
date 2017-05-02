@@ -7,11 +7,15 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <math.h>
+#include <stdbool.h>
 
 #define FS_MAGIC           0xf0f03410
 #define INODES_PER_BLOCK   128
 #define POINTERS_PER_INODE 5
 #define POINTERS_PER_BLOCK 1024
+
+bool ISMOUNT = false;
 
 // FREE BLOCK BITMAP
 // ARRAY OF INTS, 1 if used 0 if unused
@@ -39,11 +43,40 @@ union fs_block {
 };
 
 
-//////////// FUNCTIONS ////////////
+//////////// FUNCTIONS /////////////
 
 int fs_format()
 {
-	return 0;
+	if(!ISMOUNT){
+		printf("Disk already mounted. Please de-mount before attempting to format.\n");
+		return 0;
+	}
+
+	int nblocks = disk_size();
+	int ninodeblocks = ceil(nblocks/10);
+
+	union fs_block block;
+
+	int nodesToZero;
+	disk_read(0,block.data);
+	nodesToZero = block.super.ninodeblocks;
+
+	block.super.magic = FS_MAGIC;
+	block.super.nblocks = nblocks;
+	block.super.ninodeblocks = ninodeblocks;
+	block.super.inodes = ninodeblocks*128;
+
+	disk_write(0,block.data);
+
+	int i,j; // sets all the inode valid bits to 0
+	for(i=1;i<=nodesToZero;i++){
+		for(j=0;j<128;j++){
+			block.inode[j].isvalid = 0;
+		}
+		disk_write(i,block.data);
+	}
+
+	return 1;
 }
 
 void fs_debug()
@@ -78,8 +111,9 @@ void fs_debug()
 				printf("inode %d:\n",j+((i-1)*128)); // check this
 				printf("    size: %d bytes\n",it_block.inode[j].size);
 				printf("    direct blocks:");
+				// ceiling of (size / 4096) is the limit rather than 5, print all direct blocks
 				for(k=0; k<5; k++){ // direct blocks
-					if(it_block.inode[j].direct[k] > 0){
+					if(it_block.inode[j].direct[k] > 0){ // CHANGE THIS
 						printf(" %d",it_block.inode[j].direct[k]);
 					}
 				}
