@@ -18,7 +18,7 @@
 bool ISMOUNT = false;
 
 // FREE BLOCK BITMAP
-// ARRAY OF INTS, 1 if used 0 if unused
+int *bitmap; // ARRAY OF INTS, 1 if used 0 if unused
 // Everytime a system reboots, it needs to scan through and recreate the bitmap
 
 struct fs_superblock {
@@ -47,12 +47,18 @@ union fs_block {
 
 int fs_format()
 {
-	if(!ISMOUNT){
+	if(ISMOUNT){
 		printf("Disk already mounted. Please de-mount before attempting to format.\n");
 		return 0;
 	}
 
 	int nblocks = disk_size();
+	/*if((nblocks % 10) != 0){
+		ninodeblocks = (nblocks/10)+1;
+	} else{
+		ninodeblocks = nblocks/10;
+	}*/
+	
 	int ninodeblocks = ceil(nblocks/10);
 
 	union fs_block block;
@@ -64,7 +70,7 @@ int fs_format()
 	block.super.magic = FS_MAGIC;
 	block.super.nblocks = nblocks;
 	block.super.ninodeblocks = ninodeblocks;
-	block.super.inodes = ninodeblocks*128;
+	block.super.ninodes = ninodeblocks*128;
 
 	disk_write(0,block.data);
 
@@ -82,7 +88,7 @@ int fs_format()
 void fs_debug()
 {
 	union fs_block block;
-
+	
 	disk_read(0,block.data);
 	printf("superblock:\n");
 
@@ -136,7 +142,49 @@ void fs_debug()
 
 int fs_mount()
 {
-	return 0;
+	union fs_block block;
+	union fs_block it_block;
+	union fs_block tmp_block;
+
+	disk_read(0,block.data);
+	if(block.super.magic != FS_MAGIC){
+		printf("Not a valid filesystem, failed to mount.\n");
+		return 0;
+	}
+
+	bitmap = (int *) malloc(sizeof(int)*block.super.nblocks); // WHAT IF WE DEMOUNT? NEEDS TO BE 
+	//FREED
+	int i, j, k;
+	bitmap[0] = 1;
+	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
+		disk_read(i,it_block.data);
+		for(j = 0; j<128; j++){ // scans 128 inodes per block
+			if(it_block.inode[j].isvalid ==1){ // if there is a valid inode in a block
+				bitmap[i] = i;
+				for(k=0; k<5; k++){ // direct blocks
+					if(it_block.inode[j].direct[k] > 0){ // CHANGE THIS
+						bitmap[it_block.inode[j].direct[k]] = it_block.inode[j].direct[k];
+					}
+				}
+
+				if(it_block.inode[j].indirect > 0){ // indirect block
+					bitmap[it_block.inode[j].indirect] = it_block.inode[j].indirect;
+					disk_read(it_block.inode[j].indirect,tmp_block.data);
+					for(k=0; k<1024; k++){
+						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
+							bitmap[tmp_block.pointers[k]] = tmp_block.pointers[k];
+						}
+					}
+				}
+			}
+		}
+	}
+	for(i = 0; i<block.super.nblocks; i++){
+		printf(" %d ",bitmap[i]);
+	}
+	
+	ISMOUNT = true;
+	return 1;
 }
 
 int fs_create()
