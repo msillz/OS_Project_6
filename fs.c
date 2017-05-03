@@ -72,17 +72,17 @@ int fs_format()
 	block.super.magic = FS_MAGIC;
 	block.super.nblocks = nblocks;
 	block.super.ninodeblocks = ninodeblocks;
-	block.super.ninodes = ninodeblocks*128;
+	block.super.ninodes = ninodeblocks*INODES_PER_BLOCK;
 
 	disk_write(0,block.data);
 
 	int i,j,k; // sets all the inode valid bits to 0
-	for(i=1;i<=nodesToZero;i++){
-		for(j=0;j<128;j++){
-			if(i>1 || (j!=0 && i==1)){
+	for(i = 1;i <= nodesToZero; i++){
+		for(j = 0;j < INODES_PER_BLOCK; j++){
+			if(i > 1 || (j !=0 && i == 1)){
 				block.inode[j].isvalid = 0;
 				block.inode[j].size = 0;
-				for(k=0;k<5;k++){
+				for(k = 0;k < POINTERS_PER_INODE; k++){
 					block.inode[j].direct[k] = 0;
 				}
 				block.inode[j].indirect = 0;
@@ -119,15 +119,15 @@ void fs_debug()
 	union fs_block tmp_block;
 
 	// INODE HANDLER //
-	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
+	for(i = 1; i <= block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
-		for(j = 0; j<128; j++){ // scans 128 inodes per block
+		for(j = 0; j < INODES_PER_BLOCK; j++){ // scans 128 inodes per block
 			if(it_block.inode[j].isvalid == 1){
-				printf("inode %d:\n",j+((i-1)*128)); // check this
+				printf("inode %d:\n",j+((i-1)*INODES_PER_BLOCK)); // check this
 				printf("    size: %d bytes\n",it_block.inode[j].size);
 				printf("    direct blocks:");
 				// ceiling of (size / 4096) is the limit rather than 5, print all direct blocks
-				for(k=0; k<5; k++){ // direct blocks
+				for(k = 0; k < POINTERS_PER_INODE; k++){ // direct blocks
 					if(it_block.inode[j].direct[k] > 0){ // CHANGE THIS
 						printf(" %d",it_block.inode[j].direct[k]);
 					}
@@ -137,7 +137,7 @@ void fs_debug()
 					printf("    indirect block: %d\n",it_block.inode[j].indirect);
 					disk_read(it_block.inode[j].indirect,tmp_block.data);
 					printf("    indirect data blocks:");
-					for(k=0; k<1024; k++){
+					for(k = 0; k < POINTERS_PER_BLOCK; k++){
 						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
 							printf(" %d",tmp_block.pointers[k]);
 						}
@@ -162,7 +162,7 @@ int fs_mount()
 
 	disk_read(0,block.data);
 	if(block.super.magic != FS_MAGIC){
-		printf("Not a valid filesystem, failed to mount.\n");
+		printf("Error: Not a valid filesystem, failed to mount.\n");
 		return 0;
 	}
 	int ninodes = block.super.ninodeblocks;
@@ -173,12 +173,12 @@ int fs_mount()
 	for(i=0;i<ninodes+1;i++){
 		bitmap[i] = 1;
 	}
-	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
+	for(i = 1; i<= block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
-		for(j = 0; j<128; j++){ // scans 128 inodes per block
+		for(j = 0; j< INODES_PER_BLOCK; j++){ // scans 128 inodes per block
 			if(it_block.inode[j].isvalid ==1){ // if there is a valid inode in a block
 				bitmap[i] = i;
-				for(k=0; k<5; k++){ // direct blocks
+				for(k = 0; k < POINTERS_PER_INODE; k++){ // direct blocks
 					if(it_block.inode[j].direct[k] > 0){ // CHANGE THIS
 						bitmap[it_block.inode[j].direct[k]] = it_block.inode[j].direct[k];
 					}
@@ -187,7 +187,7 @@ int fs_mount()
 				if(it_block.inode[j].indirect > 0){ // indirect block
 					bitmap[it_block.inode[j].indirect] = it_block.inode[j].indirect;
 					disk_read(it_block.inode[j].indirect,tmp_block.data);
-					for(k=0; k<1024; k++){
+					for(k=0; k<POINTERS_PER_BLOCK; k++){
 						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
 							bitmap[tmp_block.pointers[k]] = tmp_block.pointers[k];
 						}
@@ -210,7 +210,7 @@ int fs_create()
 	disk_read(0,block.data);
 	int ninodeblocks = block.super.ninodeblocks;
 	int i,j;
-	for(i=1; i<=ninodeblocks;i++){
+	for(i = 1; i <= ninodeblocks; i++){
 		disk_read(i,block.data);
 		for(j=0;j<INODES_PER_BLOCK;j++){
 			if ( (i > 1) || (i == 1 && j !=0) ) {
@@ -218,20 +218,20 @@ int fs_create()
 					block.inode[j].isvalid = 1;
 					block.inode[j].size = 0;
 					disk_write(i,block.data);
-					return ((i-1)*128)+j;
+					return ((i-1)*INODES_PER_BLOCK)+j;
 				}
 			}
 		}
 	}
-	printf("error: no space in inode blocks\n");
+	printf("Error: no space in inode blocks\n");
 	return 0;
 }
 
 int fs_delete( int inumber )
 {
 	union fs_block block;
-	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128)+1;
+	int numInBlock = inumber%INODES_PER_BLOCK;
+	int numBlock = floor(inumber/INODES_PER_BLOCK)+1;
 	disk_read(numBlock,block.data);
 
 	if(block.inode[numInBlock].isvalid == 0)
@@ -244,7 +244,7 @@ int fs_delete( int inumber )
 
 	int k;
 
-	for(k=0;k<5;k++){
+	for(k = 0; k < POINTERS_PER_INODE; k++){
 		if(block.inode[numInBlock].direct[k] > 0){
 			bitmap[block.inode[numInBlock].direct[k]] = 0;
 			block.inode[numInBlock].direct[k] = 0; // direct blocks to 0
@@ -273,8 +273,8 @@ int fs_delete( int inumber )
 int fs_getsize( int inumber )
 {
 	union fs_block block;
-	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128)+1;
+	int numInBlock = inumber%INODES_PER_BLOCK;
+	int numBlock = floor(inumber/INODES_PER_BLOCK)+1;
 	disk_read(numBlock,block.data);
 	if(block.inode[numInBlock].size >= 0){
 		return block.inode[numInBlock].size;
@@ -287,8 +287,8 @@ int fs_read( int inumber, char *data, int length, int offset )
 {
 	if(ISMOUNT==false){return 0;}
 	union fs_block block;
-	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128)+1;
+	int numInBlock = inumber%INODES_PER_BLOCK;
+	int numBlock = floor(inumber/INODES_PER_BLOCK)+1;
 	disk_read(numBlock,block.data);
 
 	if(block.inode[numInBlock].isvalid == 0){
@@ -299,7 +299,7 @@ int fs_read( int inumber, char *data, int length, int offset )
 	int bytes_Traversed = 0;
 	int i,j;
 
-	for(i=0;i<5;i++){
+	for(i=0;i<POINTERS_PER_INODE;i++){
 		if(block.inode[numInBlock].direct[i] > 0){ // if there is a valid direct pointer
 
 			union fs_block direct;
@@ -358,11 +358,11 @@ int fs_write( int inumber, const char *data, int length, int offset )
 
 	union fs_block block;
 
-	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128)+1;
+	int numInBlock = inumber%INODES_PER_BLOCK;
+	int numBlock = floor(inumber/INODES_PER_BLOCK)+1;
 	disk_read(numBlock,block.data);
 	
-	printf("Reading the %dth element in block %d\n",numInBlock,numBlock);/////@@@@@
+	// printf("Reading the %dth element in block %d\n",numInBlock,numBlock);/////@@@@@
 
 	if(block.inode[numInBlock].isvalid == 0){
 		printf("Failed to write to inode %d: inode not valid\n",inumber);
@@ -374,27 +374,29 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	int i,j,newBlock;
 	bool found_block;
 
-	for(i=0;i<5;i++){ // input data into direct pointers
+
+	/* DIRECT */
+	for(i=0;i<POINTERS_PER_INODE;i++){ // input data into direct pointers
 		// Finds which block using Direct Pointers to write to
-		printf("checking direct pointer %d\n",i); ////////@@@@
+		// printf("checking direct pointer %d\n",i); ////////@@@@
 		if(block.inode[numInBlock].direct[i] <= 0){ // if direct pointer is invalid
-			printf("    no pointer for the %dth direct pointer\n",i); ///////@@@@@@@@
+			// printf("    no pointer for the %dth direct pointer\n",i); ///////@@@@@@@@
 			found_block = false;
 			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
-				printf("        checking bitmap element %d\n",j);//////////@@@@@@@@
+				// printf("        checking bitmap element %d\n",j);//////////@@@@@@@@
 				if(bitmap[j] == 0){    // if the block is free
-					printf("            free block %d found\n",j);
+					// printf("            free block %d found\n",j);
 					newBlock = j;
 					block.inode[numInBlock].direct[i] = newBlock; // sets the direct pointer????????
-					printf("NEWBLOCK ======= %d\n",newBlock);
-					printf("            inode %d direct pointer %d set to %d\n",inumber,i,block.inode[numInBlock].direct[i]);///////@@@@@@@
+					// printf("NEWBLOCK ======= %d\n",newBlock);
+					// printf("            inode %d direct pointer %d set to %d\n",inumber,i,block.inode[numInBlock].direct[i]);///////@@@@@@@
 					found_block = true;
 					bitmap[newBlock] = 1;
 					break;
 				}
 			}
 			if(!found_block && (i==4)){ // makes sure there is space in the bitmap but checks all inodes
-				printf("        Error: cannot allocate new direct data block, no space\n");
+				// printf("        Error: cannot allocate new direct data block, no space\n");
 				break; // No more space for direct blocks, goes to the indirect blocks
 			} else if(!found_block){
 				continue;
@@ -404,18 +406,18 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		union fs_block direct;
 		disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
 
-		printf("    WRITE TO NODE:\n");
+		// printf("    WRITE TO NODE:\n");
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				direct.data[j] = data[bytes_Written];//@@@@@@@@@@@@@@@  j  bytes Written @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-				printf("%c",direct.data[j]);
+				// printf("%c",direct.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				block.inode[numInBlock].size++; // increments the size of the inode
-				printf("% d ",bytes_Written);
+				// printf("% d ",bytes_Written);
 				bytes_Traversed++;
 				if(bytes_Written >= length){ // if we have copied the length requested, return
 					disk_write(block.inode[numInBlock].direct[i],direct.data);
-					printf("Wrote %d bytes : exited in direct becayse %d = %d\n",bytes_Written,bytes_Written,length);
+					// printf("Wrote %d bytes : exited in direct because %d = %d\n",bytes_Written,bytes_Written,length);
 					disk_write(numBlock,block.data); // writes back the inode
 					return bytes_Written;
 				}
@@ -425,17 +427,17 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		}
 		disk_write(block.inode[numInBlock].direct[i],direct.data);
 	}
-	printf("Exited after Direct\n");
+	// printf("Exited after Direct\n");
 
-	/////////// Indirect //////////
-	printf("Trying to add data to inode======================\n");
+	/* INDIRECT */
+	// printf("Trying to add data to inode======================\n");
 	
-	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is invalid
-		printf("No indirect block associated with this inode\n");
+	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is not in use
+		// printf("No indirect block associated with this inode\n");
 		found_block = false;
 		for(j=0;j<NUM_BLOCKS;j++){
 			if(bitmap[j]==0){
-				printf("indirect block allocated at block %d\n",j);
+				// printf("indirect block allocated at block %d\n",j);
 				newBlock = j;
 				block.inode[numInBlock].indirect = newBlock;
 				found_block = true;
@@ -454,7 +456,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	disk_read(block.inode[numInBlock].indirect,indirect.data); // open that indirect block
 
 	for(i=0;i<POINTERS_PER_BLOCK;i++){
-		if(indirect.pointers[i] <= 0){ // if there is no valid indirect pointer
+		if(indirect.pointers[i] <= 0){ // if there is an unused pointer
 			found_block = false;
 			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
 				if(bitmap[j] == 0){    // if the block is free
@@ -466,7 +468,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 				}
 			}
 			if(!found_block && (i==POINTERS_PER_BLOCK-1)){
-				printf("no room in the indirect block");
+				// printf("no room in the indirect block");
 				return 0;
 			} else if(!found_block){
 				continue;
@@ -479,14 +481,14 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				indirectData.data[j] = data[bytes_Written]; ////// j bytes_Written @@@@@@@@@@@@@@@@@@@
-				printf("%c",indirectData.data[j]);
+				// printf("%c",indirectData.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				block.inode[numInBlock].size++; // increments the size of the inode
-				printf("% d ",bytes_Written);
+				// printf("% d ",bytes_Written);
 				bytes_Traversed++;
 				if(bytes_Written >= length){ // if we have copied the length requested, return
 					disk_write(indirect.pointers[i],indirectData.data); // writes to the data block
-					printf("Wrote %d bytes : exited in direct becayse %d = %d\n",bytes_Written,bytes_Written,length);
+					// printf("Wrote %d bytes : exited in direct because %d = %d\n",bytes_Written,bytes_Written,length);
 					disk_write(numBlock,block.data); // writes back the inode
 					disk_write(block.inode[numInBlock].indirect,indirect.data); // writes to the indirect block
 					return bytes_Written;
@@ -496,7 +498,6 @@ int fs_write( int inumber, const char *data, int length, int offset )
 			}
 		}
 		disk_write(indirect.pointers[i],indirectData.data); // writes to the data block
-
 	}
 
 	return bytes_Written;
