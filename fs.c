@@ -383,7 +383,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
 				printf("        checking bitmap element %d\n",j);//////////@@@@@@@@
 				if(bitmap[j] == 0){    // if the block is free
-					printf("            free block %d found",j);
+					printf("            free block %d found\n",j);
 					newBlock = j;
 					block.inode[numInBlock].direct[i] = newBlock;
 					printf("            inode %d direct pointer %d set to %d\n",inumber,i,block.inode[numInBlock].direct[i]);///////@@@@@@@
@@ -392,28 +392,28 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					break;
 				}
 			}
-			if(!found_block){
+			if(!found_block){ // makes sure there is space in the bitmap
 				printf("        Error: cannot allocate new direct data block, no space\n");
-				return 0;
+				return bytes_Written;
 			}
 		}
 
 		union fs_block direct;
 		disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
 
+		printf("    WRITE TO NODE:\n");
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				direct.data[j] = data[bytes_Written];
-				printf("    %c",direct.data[j]);
+				printf("%c",direct.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				bytes_Traversed++;
 
-				if(bytes_Written == length){ // if we have copied the length requested, return
+				if(bytes_Written >= length){ // if we have copied the length requested, return
 					disk_write(block.inode[numInBlock].direct[i],direct.data);
 					return bytes_Written;
 				}
 			} else{
-// HUGE				printf("Traversed %d -",bytes_Traversed);//////@@@@@@@
 				bytes_Traversed++;
 			}
 		}
