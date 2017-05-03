@@ -357,13 +357,15 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	if(ISMOUNT == false){return 0;}
 
 	union fs_block block;
-	disk_read(0,block.data);
 
 	int numInBlock = inumber%128;
 	int numBlock = floor(inumber/128)+1;
 	disk_read(numBlock,block.data);
+	
+	printf("Reading the %dth element in block %d\n",numInBlock,numBlock);/////@@@@@
 
 	if(block.inode[numInBlock].isvalid == 0){
+		printf("Failed to write to inode %d: inode not valid\n",inumber);
 		return 0;
 	}
 
@@ -372,20 +374,26 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	int i,j,newBlock;
 	bool found_block;
 
-	for(i=0;i<5;i++){
+	for(i=0;i<5;i++){ // input data into direct pointers
+		// Finds which block using Direct Pointers to write to
+		printf("checking direct pointer %d\n",i); ////////@@@@
 		if(block.inode[numInBlock].direct[i] <= 0){ // if direct pointer is invalid
+			printf("    no pointer for the %dth direct pointer\n",i); ///////@@@@@@@@
 			found_block = false;
 			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
+				printf("        checking bitmap element %d\n",j);//////////@@@@@@@@
 				if(bitmap[j] == 0){    // if the block is free
+					printf("            free block %d found",j);
 					newBlock = j;
 					block.inode[numInBlock].direct[i] = newBlock;
+					printf("            inode %d direct pointer %d set to %d\n",inumber,i,block.inode[numInBlock].direct[i]);///////@@@@@@@
 					found_block = true;
 					bitmap[newBlock] = 1;
 					break;
 				}
 			}
 			if(!found_block){
-				printf("Error: cannot allocate new direct data block, no space\n");
+				printf("        Error: cannot allocate new direct data block, no space\n");
 				return 0;
 			}
 		}
@@ -396,6 +404,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				direct.data[j] = data[bytes_Written];
+				printf("    %c",direct.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				bytes_Traversed++;
 
@@ -404,6 +413,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					return bytes_Written;
 				}
 			} else{
+// HUGE				printf("Traversed %d -",bytes_Traversed);//////@@@@@@@
 				bytes_Traversed++;
 			}
 		}
