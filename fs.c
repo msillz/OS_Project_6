@@ -77,12 +77,12 @@ int fs_format()
 	disk_write(0,block.data);
 
 	int i,j,k; // sets all the inode valid bits to 0
-	for(i = 1;i <= nodesToZero; i++){
-		for(j = 0;j < INODES_PER_BLOCK; j++){
+	for(i = 1; i <= nodesToZero; i++){
+		for(j = 0; j < INODES_PER_BLOCK; j++){
 			if(i > 1 || (j !=0 && i == 1)){
 				block.inode[j].isvalid = 0;
 				block.inode[j].size = 0;
-				for(k = 0;k < POINTERS_PER_INODE; k++){
+				for(k = 0; k < POINTERS_PER_INODE; k++){
 					block.inode[j].direct[k] = 0;
 				}
 				block.inode[j].indirect = 0;
@@ -170,10 +170,10 @@ int fs_mount()
 	bitmap = (int *) malloc(sizeof(int)*block.super.nblocks); // WHAT IF WE DEMOUNT? NEEDS TO BE 
 	//FREED
 	int i, j, k;
-	for(i=0;i<ninodes+1;i++){
+	for(i = 0; i < ninodes+1; i++){
 		bitmap[i] = 1;
 	}
-	for(i = 1; i<= block.super.ninodeblocks; i++){ // Iterates through all inode blocks
+	for(i = 1; i <= block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
 		for(j = 0; j< INODES_PER_BLOCK; j++){ // scans 128 inodes per block
 			if(it_block.inode[j].isvalid ==1){ // if there is a valid inode in a block
@@ -187,7 +187,7 @@ int fs_mount()
 				if(it_block.inode[j].indirect > 0){ // indirect block
 					bitmap[it_block.inode[j].indirect] = it_block.inode[j].indirect;
 					disk_read(it_block.inode[j].indirect,tmp_block.data);
-					for(k=0; k<POINTERS_PER_BLOCK; k++){
+					for(k = 0; k < POINTERS_PER_BLOCK; k++){
 						if(tmp_block.pointers[k] > 0){ // THEY ARE ALL 0
 							bitmap[tmp_block.pointers[k]] = tmp_block.pointers[k];
 						}
@@ -196,7 +196,7 @@ int fs_mount()
 			}
 		}
 	}
-	for(i = 0; i<block.super.nblocks; i++){
+	for(i = 0; i < block.super.nblocks; i++){
 		printf(" %d ",bitmap[i]);
 	}
 	
@@ -212,7 +212,7 @@ int fs_create()
 	int i,j;
 	for(i = 1; i <= ninodeblocks; i++){
 		disk_read(i,block.data);
-		for(j=0;j<INODES_PER_BLOCK;j++){
+		for(j = 0; j < INODES_PER_BLOCK; j++){
 			if ( (i > 1) || (i == 1 && j !=0) ) {
 				if(block.inode[j].isvalid == 0){
 					block.inode[j].isvalid = 1;
@@ -254,7 +254,7 @@ int fs_delete( int inumber )
 	if(block.inode[numInBlock].indirect > 0){
 		union fs_block indirect;
 		disk_read(block.inode[numInBlock].indirect,indirect.data);
-		for(k=0;k<POINTERS_PER_BLOCK;k++){
+		for(k = 0; k < POINTERS_PER_BLOCK; k++){
 			if( indirect.pointers[k] > 0 ){
 				bitmap[indirect.pointers[k]] = 0;
 				indirect.pointers[k] = 0;
@@ -332,7 +332,7 @@ int fs_read( int inumber, char *data, int length, int offset )
 				union fs_block indirectData;
 				disk_read(indirect.pointers[i],indirectData.data); // read that data block
 
-				for(j=0;j<DISK_BLOCK_SIZE;j++){
+				for(j = 0; j < DISK_BLOCK_SIZE; j++){
 					if(bytes_Traversed >= offset){
 						data[bytes_Copied] = indirectData.data[j];
 						bytes_Copied++;
@@ -376,13 +376,13 @@ int fs_write( int inumber, const char *data, int length, int offset )
 
 
 	/* DIRECT */
-	for(i=0;i<POINTERS_PER_INODE;i++){ // input data into direct pointers
+	for(i = 0; i < POINTERS_PER_INODE; i++){ // input data into direct pointers
 		// Finds which block using Direct Pointers to write to
 		// printf("checking direct pointer %d\n",i); ////////@@@@
 		if(block.inode[numInBlock].direct[i] <= 0){ // if direct pointer is invalid
 			// printf("    no pointer for the %dth direct pointer\n",i); ///////@@@@@@@@
 			found_block = false;
-			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
+			for(j = 0; j < NUM_BLOCKS; j++){ // check the bitmap for a free block
 				// printf("        checking bitmap element %d\n",j);//////////@@@@@@@@
 				if(bitmap[j] == 0){    // if the block is free
 					// printf("            free block %d found\n",j);
@@ -395,7 +395,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					break;
 				}
 			}
-			if(!found_block && (i==4)){ // makes sure there is space in the bitmap but checks all inodes
+			if(!found_block && (i == 4)){ // makes sure there is space in the bitmap but checks all inodes
 				// printf("        Error: cannot allocate new direct data block, no space\n");
 				break; // No more space for direct blocks, goes to the indirect blocks
 			} else if(!found_block){
@@ -407,7 +407,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
 
 		// printf("    WRITE TO NODE:\n");
-		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
+		for(j = 0; j < DISK_BLOCK_SIZE; j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				direct.data[j] = data[bytes_Written];//@@@@@@@@@@@@@@@  j  bytes Written @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 				// printf("%c",direct.data[j]);
@@ -435,7 +435,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is not in use
 		// printf("No indirect block associated with this inode\n");
 		found_block = false;
-		for(j=0;j<NUM_BLOCKS;j++){
+		for(j = 0; j < NUM_BLOCKS; j++){
 			if(bitmap[j]==0){
 				// printf("indirect block allocated at block %d\n",j);
 				newBlock = j;
@@ -455,7 +455,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 	union fs_block indirect;
 	disk_read(block.inode[numInBlock].indirect,indirect.data); // open that indirect block
 
-	for(i=0;i<POINTERS_PER_BLOCK;i++){
+	for(i = 0; i < POINTERS_PER_BLOCK; i++){
 		if(indirect.pointers[i] <= 0){ // if there is an unused pointer
 			found_block = false;
 			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
@@ -467,7 +467,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					break;
 				}
 			}
-			if(!found_block && (i==POINTERS_PER_BLOCK-1)){
+			if(!found_block && (i == POINTERS_PER_BLOCK-1)){
 				// printf("no room in the indirect block");
 				return 0;
 			} else if(!found_block){
@@ -478,7 +478,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		union fs_block indirectData;
 		disk_read(indirect.pointers[i],indirectData.data); // read that data block
 
-		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
+		for(j = 0 ; j < DISK_BLOCK_SIZE; j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				indirectData.data[j] = data[bytes_Written]; ////// j bytes_Written @@@@@@@@@@@@@@@@@@@
 				// printf("%c",indirectData.data[j]);
