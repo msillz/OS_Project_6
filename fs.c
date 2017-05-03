@@ -221,8 +221,8 @@ int fs_delete( int inumber )
 {
 	union fs_block block;
 	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128);
-	disk_read(1+numBlock,block.data);
+	int numBlock = floor(inumber/128)+1;
+	disk_read(numBlock,block.data);
 	if(block.inode[numInBlock].isvalid == 0)
 	{
 		return 0;
@@ -234,7 +234,7 @@ int fs_delete( int inumber )
 		block.inode[numInBlock].direct[k] = 0;
 	}
 	block.inode[numInBlock].indirect = 0;
-	disk_write(1+numBlock,block.data);
+	disk_write(numBlock,block.data);
 	return 1;
 	// fix the bitmap???
 
@@ -244,8 +244,8 @@ int fs_getsize( int inumber )
 {
 	union fs_block block;
 	int numInBlock = inumber%128;
-	int numBlock = floor(inumber/128);
-	disk_read(1+numBlock,block.data);
+	int numBlock = floor(inumber/128)+1;
+	disk_read(numBlock,block.data);
 	if(block.inode[numInBlock].size >= 0){
 		return block.inode[numInBlock].size;
 	} else{
@@ -255,7 +255,60 @@ int fs_getsize( int inumber )
 
 int fs_read( int inumber, char *data, int length, int offset )
 {
-	return 0;
+	union fs_block block;
+	int numInBlock = inumber%128;
+	int numBlock = floor(inumber/128)+1;
+	disk_read(numBlock,block.data);
+
+	if(block.inode[numInBlock].isvalid == 0){
+		return 0;
+	}
+
+	int bytes_Copied = 0;
+	int i,j;
+	bool first = true;
+
+	for(i=0;i<5;i++){
+		if(block.inode[numInBlock].direct[i] > 0){ // if there is a valid direct pointer
+
+			union fs_block direct;
+			disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
+
+			for(j=offset;j<DISK_BLOCK_SIZE;j++){ // for every data byte
+				data[bytes_Copied] = direct.data[j]; // copy the data into data[]
+				bytes_Copied++; // increment the number of bytes Copied
+
+				if(bytes_Copied == length){ // if we have copied the length requested, return
+					return bytes_Copied;
+				}
+
+				if(first){ // Ensures offset only applies to the first direct block
+					offset = 0;
+					first = false;
+				}
+			}
+		}
+	}
+
+	if(block.inode[numInBlock].indirect > 0){ // if there is a valid indirect block
+		union fs_block indirect;
+		disk_read(block.inode[numInBlock].indirect,indirect.data); // open that indirect block
+		for(i=0;i<POINTERS_PER_BLOCK;i++){
+			if(indirect.pointers[i] > 0){ // if there is a valid indirect pointer
+				union fs_block indirectData;
+				disk_read(indirect.pointers[i],indirectData.data); // read that data block
+				for(j=0;j<DISK_BLOCK_SIZE;j++){
+					data[bytes_Copied] = indirectData.data[j];
+					bytes_Copied++;
+					
+					if(bytes_Copied == length){
+						return bytes_Copied;
+					}
+				}
+			}
+		}
+	}
+	return bytes_Copied;
 }
 
 int fs_write( int inumber, const char *data, int length, int offset )
