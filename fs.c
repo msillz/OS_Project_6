@@ -385,7 +385,8 @@ int fs_write( int inumber, const char *data, int length, int offset )
 				if(bitmap[j] == 0){    // if the block is free
 					printf("            free block %d found\n",j);
 					newBlock = j;
-					block.inode[numInBlock].direct[i] = newBlock;
+					block.inode[numInBlock].direct[i] = newBlock; // sets the direct pointer????????
+					printf("NEWBLOCK ======= %d\n",newBlock);
 					printf("            inode %d direct pointer %d set to %d\n",inumber,i,block.inode[numInBlock].direct[i]);///////@@@@@@@
 					found_block = true;
 					bitmap[newBlock] = 1;
@@ -407,10 +408,13 @@ int fs_write( int inumber, const char *data, int length, int offset )
 				direct.data[j] = data[bytes_Written];
 				printf("%c",direct.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
+				block.inode[numInBlock].size++; // increments the size of the inode
+				printf("% d ",bytes_Written);
 				bytes_Traversed++;
-
 				if(bytes_Written >= length){ // if we have copied the length requested, return
 					disk_write(block.inode[numInBlock].direct[i],direct.data);
+					printf("Wrote %d bytes : exited in direct becayse %d = %d\n",bytes_Written,bytes_Written,length);
+					disk_write(numBlock,block.data); // writes back the inode
 					return bytes_Written;
 				}
 			} else{
@@ -419,6 +423,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		}
 		disk_write(block.inode[numInBlock].direct[i],direct.data);
 	}
+	printf("Exited after Direct\n");
 /*
 	// Indirect //
 	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is invalid
