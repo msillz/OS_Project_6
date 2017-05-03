@@ -151,10 +151,10 @@ void fs_debug()
 
 int fs_mount()
 {
-	//if(ISMOUNT == true){     UNCOMMENT THIS WE NEED IT DON'T FORGET TO UNCOMMENT THIS WE NEED IT
-	//	printf("Error: disk already mounted\n");
-	//	return 0;
-	//}
+	if(ISMOUNT == true){ //     UNCOMMENT THIS WE NEED IT DON'T FORGET TO UNCOMMENT THIS WE NEED IT
+		printf("Error: disk already mounted\n");
+		return 0;
+	}
 
 	union fs_block block;
 	union fs_block it_block;
@@ -407,7 +407,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		printf("    WRITE TO NODE:\n");
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
-				direct.data[j] = data[bytes_Written];
+				direct.data[j] = data[bytes_Written];//@@@@@@@@@@@@@@@  j  bytes Written @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 				printf("%c",direct.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				block.inode[numInBlock].size++; // increments the size of the inode
@@ -478,7 +478,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 
 		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
-				indirectData.data[j] = data[bytes_Written];
+				indirectData.data[j] = data[bytes_Written]; ////// j bytes_Written @@@@@@@@@@@@@@@@@@@
 				printf("%c",indirectData.data[j]);
 				bytes_Written++; // increment the number of bytes Copied
 				block.inode[numInBlock].size++; // increments the size of the inode
