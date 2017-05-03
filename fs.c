@@ -265,6 +265,7 @@ int fs_read( int inumber, char *data, int length, int offset )
 	}
 
 	int bytes_Copied = 0;
+	int bytes_Traversed = 0;
 	int i,j;
 	bool first = true;
 
@@ -274,35 +275,44 @@ int fs_read( int inumber, char *data, int length, int offset )
 			union fs_block direct;
 			disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
 
-			for(j=offset;j<DISK_BLOCK_SIZE;j++){ // for every data byte
-				data[bytes_Copied] = direct.data[j]; // copy the data into data[]
-				bytes_Copied++; // increment the number of bytes Copied
+			for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
+				if(bytes_Traversed >= offset){
+					data[bytes_Copied] = direct.data[j]; // copy the data into data[]
+					bytes_Copied++; // increment the number of bytes Copied
+					bytes_Traversed++;
 
-				if(bytes_Copied == length){ // if we have copied the length requested, return
-					return bytes_Copied;
-				}
-
-				if(first){ // Ensures offset only applies to the first direct block
-					offset = 0;
-					first = false;
+					if(bytes_Copied == length){ // if we have copied the length requested, return
+						return bytes_Copied;
+					}
+				} else{
+					bytes_Traversed++;
 				}
 			}
 		}
 	}
 
 	if(block.inode[numInBlock].indirect > 0){ // if there is a valid indirect block
+
 		union fs_block indirect;
 		disk_read(block.inode[numInBlock].indirect,indirect.data); // open that indirect block
+
 		for(i=0;i<POINTERS_PER_BLOCK;i++){
 			if(indirect.pointers[i] > 0){ // if there is a valid indirect pointer
+
 				union fs_block indirectData;
 				disk_read(indirect.pointers[i],indirectData.data); // read that data block
+
 				for(j=0;j<DISK_BLOCK_SIZE;j++){
-					data[bytes_Copied] = indirectData.data[j];
-					bytes_Copied++;
-					
-					if(bytes_Copied == length){
-						return bytes_Copied;
+					if(bytes_Traversed >= offset){
+						data[bytes_Copied] = indirectData.data[j];
+						bytes_Copied++;
+						bytes_Traversed++;
+						
+						if(bytes_Copied == length){
+							return bytes_Copied;
+						}
+					} else{
+						bytes_Traversed++;
 					}
 				}
 			}
