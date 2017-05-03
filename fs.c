@@ -17,6 +17,8 @@
 
 bool ISMOUNT = false;
 
+int NUM_BLOCKS;
+
 // FREE BLOCK BITMAP
 int *bitmap; // ARRAY OF INTS, 1 if used 0 if unused
 // Everytime a system reboots, it needs to scan through and recreate the bitmap
@@ -149,6 +151,11 @@ void fs_debug()
 
 int fs_mount()
 {
+	//if(ISMOUNT == true){     UNCOMMENT THIS WE NEED IT DON'T FORGET TO UNCOMMENT THIS WE NEED IT
+	//	printf("Error: disk already mounted\n");
+	//	return 0;
+	//}
+
 	union fs_block block;
 	union fs_block it_block;
 	union fs_block tmp_block;
@@ -158,11 +165,14 @@ int fs_mount()
 		printf("Not a valid filesystem, failed to mount.\n");
 		return 0;
 	}
-
+	int ninodes = block.super.ninodeblocks;
+	NUM_BLOCKS = block.super.nblocks;
 	bitmap = (int *) malloc(sizeof(int)*block.super.nblocks); // WHAT IF WE DEMOUNT? NEEDS TO BE 
 	//FREED
 	int i, j, k;
-	bitmap[0] = 1;
+	for(i=0;i<ninodes+1;i++){
+		bitmap[i] = 1;
+	}
 	for(i = 1; i<=block.super.ninodeblocks; i++){ // Iterates through all inode blocks
 		disk_read(i,it_block.data);
 		for(j = 0; j<128; j++){ // scans 128 inodes per block
@@ -223,18 +233,38 @@ int fs_delete( int inumber )
 	int numInBlock = inumber%128;
 	int numBlock = floor(inumber/128)+1;
 	disk_read(numBlock,block.data);
+
 	if(block.inode[numInBlock].isvalid == 0)
 	{
 		return 0;
 	}
+
 	block.inode[numInBlock].isvalid = 0;
 	block.inode[numInBlock].size = 0;
+
 	int k;
+
 	for(k=0;k<5;k++){
-		block.inode[numInBlock].direct[k] = 0;
+		if(block.inode[numInBlock].direct[k] > 0){
+			bitmap[block.inode[numInBlock].direct[k]] = 0;
+			block.inode[numInBlock].direct[k] = 0; // direct blocks to 0
+		}
 	}
-	block.inode[numInBlock].indirect = 0;
+	
+	if(block.inode[numInBlock].indirect > 0){
+		union fs_block indirect;
+		disk_read(block.inode[numInBlock].indirect,indirect.data);
+		for(k=0;k<POINTERS_PER_BLOCK;k++){
+			if( indirect.pointers[k] > 0 ){
+				bitmap[indirect.pointers[k]] = 0;
+				indirect.pointers[k] = 0;
+			}
+		}
+	}
+
+	block.inode[numInBlock].indirect = 0; // indirect blocks to 0
 	disk_write(numBlock,block.data);
+
 	return 1;
 	// fix the bitmap???
 
@@ -255,6 +285,7 @@ int fs_getsize( int inumber )
 
 int fs_read( int inumber, char *data, int length, int offset )
 {
+	if(ISMOUNT==false){return 0;}
 	union fs_block block;
 	int numInBlock = inumber%128;
 	int numBlock = floor(inumber/128)+1;
@@ -267,7 +298,6 @@ int fs_read( int inumber, char *data, int length, int offset )
 	int bytes_Copied = 0;
 	int bytes_Traversed = 0;
 	int i,j;
-	bool first = true;
 
 	for(i=0;i<5;i++){
 		if(block.inode[numInBlock].direct[i] > 0){ // if there is a valid direct pointer
@@ -307,7 +337,7 @@ int fs_read( int inumber, char *data, int length, int offset )
 						data[bytes_Copied] = indirectData.data[j];
 						bytes_Copied++;
 						bytes_Traversed++;
-						
+
 						if(bytes_Copied == length){
 							return bytes_Copied;
 						}
@@ -323,5 +353,118 @@ int fs_read( int inumber, char *data, int length, int offset )
 
 int fs_write( int inumber, const char *data, int length, int offset )
 {
-	return 0;
+
+	if(ISMOUNT == false){return 0;}
+
+	union fs_block block;
+	disk_read(0,block.data);
+
+	int numInBlock = inumber%128;
+	int numBlock = floor(inumber/128)+1;
+	disk_read(numBlock,block.data);
+
+	if(block.inode[numInBlock].isvalid == 0){
+		return 0;
+	}
+
+	int bytes_Written = 0;
+	int bytes_Traversed = 0;
+	int i,j,newBlock;
+	bool found_block;
+
+	for(i=0;i<5;i++){
+		if(block.inode[numInBlock].direct[i] <= 0){ // if direct pointer is invalid
+			found_block = false;
+			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
+				if(bitmap[j] == 0){    // if the block is free
+					newBlock = j;
+					block.inode[numInBlock].direct[i] = newBlock;
+					found_block = true;
+					bitmap[newBlock] = 1;
+					break;
+				}
+			}
+			if(!found_block){
+				printf("Error: cannot allocate new direct data block, no space\n");
+				return 0;
+			}
+		}
+
+		union fs_block direct;
+		disk_read(block.inode[numInBlock].direct[i],direct.data); // read in the direct block
+
+		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
+			if(bytes_Traversed >= offset){
+				direct.data[j] = data[bytes_Written];
+				bytes_Written++; // increment the number of bytes Copied
+				bytes_Traversed++;
+
+				if(bytes_Written == length){ // if we have copied the length requested, return
+					disk_write(block.inode[numInBlock].direct[i],direct.data);
+					return bytes_Written;
+				}
+			} else{
+				bytes_Traversed++;
+			}
+		}
+		disk_write(block.inode[numInBlock].direct[i],direct.data);
+	}
+/*
+	// Indirect //
+	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is invalid
+		found_block = false;
+		for(j=0;j<NUM_BLOCKS;j++){
+			if(bitmap[j]==0){
+				newBlock = j;
+				block.inode[numInBlock].indirect = newBlock;
+				found_block = true;
+				bitmap[newBlock] = 1;
+				break;
+			}
+		}
+		if(!found_block){
+			printf("Error: cannot allocate new indirect block, no space\n");
+			return 0;
+		}
+	}
+
+
+	union fs_block indirect;
+	disk_read(block.inode[numInBlock].indirect,indirect.data); // open that indirect block
+
+	for(i=0;i<POINTERS_PER_BLOCK;i++){
+		if(indirect.pointers[i] <= 0){ // if there is no valid indirect pointer
+			found_block = false;
+			for(j=0;j<NUM_BLOCKS;j++){ // check the bitmap for a free block
+				if(bitmap[j] == 0){    // if the block is free
+					newBlock = j;
+					indirect.pointers[i] = newBlock;
+					found_block = true;
+					bitmap[newBlock] = 1;
+					break;
+				}
+			}
+		
+		}
+
+		union fs_block indirectData;
+		disk_read(indirect.pointers[i],indirectData.data); // read that data block
+
+		for(j=0;j<DISK_BLOCK_SIZE;j++){
+			if(bytes_Traversed >= offset){
+				indirectData.data[j] = data[bytes_Written];
+				bytes_Written++;
+				bytes_Traversed++;
+
+				if(bytes_Written == length){
+					return bytes_Written;
+				}
+			} else{
+				bytes_Traversed++;
+			}
+		}
+
+	}*/
+
+	return bytes_Written;
 }
