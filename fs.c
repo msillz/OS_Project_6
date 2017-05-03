@@ -393,9 +393,11 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					break;
 				}
 			}
-			if(!found_block){ // makes sure there is space in the bitmap
+			if(!found_block && (i==4)){ // makes sure there is space in the bitmap but checks all inodes
 				printf("        Error: cannot allocate new direct data block, no space\n");
-				return bytes_Written;
+				break; // No more space for direct blocks, goes to the indirect blocks
+			} else if(!found_block){
+				continue;
 			}
 		}
 
@@ -424,12 +426,16 @@ int fs_write( int inumber, const char *data, int length, int offset )
 		disk_write(block.inode[numInBlock].direct[i],direct.data);
 	}
 	printf("Exited after Direct\n");
-/*
-	// Indirect //
+
+	/////////// Indirect //////////
+	printf("Trying to add data to inode======================\n");
+	
 	if(block.inode[numInBlock].indirect <= 0){ // if the indirect block is invalid
+		printf("No indirect block associated with this inode\n");
 		found_block = false;
 		for(j=0;j<NUM_BLOCKS;j++){
 			if(bitmap[j]==0){
+				printf("indirect block allocated at block %d\n",j);
 				newBlock = j;
 				block.inode[numInBlock].indirect = newBlock;
 				found_block = true;
@@ -438,7 +444,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 			}
 		}
 		if(!found_block){
-			printf("Error: cannot allocate new indirect block, no space\n");
+			printf("Error: cannot allocate new indirect block, not enough space\n");
 			return 0;
 		}
 	}
@@ -459,27 +465,39 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					break;
 				}
 			}
-		
+			if(!found_block && (i==POINTERS_PER_BLOCK-1)){
+				printf("no room in the indirect block");
+				return 0;
+			} else if(!found_block){
+				continue;
+			}
 		}
 
 		union fs_block indirectData;
 		disk_read(indirect.pointers[i],indirectData.data); // read that data block
 
-		for(j=0;j<DISK_BLOCK_SIZE;j++){
+		for(j=0;j<DISK_BLOCK_SIZE;j++){ // for every data byte
 			if(bytes_Traversed >= offset){
 				indirectData.data[j] = data[bytes_Written];
-				bytes_Written++;
+				printf("%c",indirectData.data[j]);
+				bytes_Written++; // increment the number of bytes Copied
+				block.inode[numInBlock].size++; // increments the size of the inode
+				printf("% d ",bytes_Written);
 				bytes_Traversed++;
-
-				if(bytes_Written == length){
+				if(bytes_Written >= length){ // if we have copied the length requested, return
+					disk_write(indirect.pointers[i],indirectData.data); // writes to the data block
+					printf("Wrote %d bytes : exited in direct becayse %d = %d\n",bytes_Written,bytes_Written,length);
+					disk_write(numBlock,block.data); // writes back the inode
+					disk_write(block.inode[numInBlock].indirect,indirect.data); // writes to the indirect block
 					return bytes_Written;
 				}
 			} else{
 				bytes_Traversed++;
 			}
 		}
+		disk_write(indirect.pointers[i],indirectData.data); // writes to the data block
 
-	}*/
+	}
 
 	return bytes_Written;
 }
